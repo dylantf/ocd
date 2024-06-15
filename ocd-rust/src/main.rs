@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::DateTime;
 
 fn main() {
     let mut reader = csv::ReaderBuilder::new()
