@@ -6,7 +6,6 @@ cabal-version: 1.12
 
 name:           ocd
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/ocd#readme>
 homepage:       https://github.com/githubuser/ocd#readme
 bug-reports:    https://github.com/githubuser/ocd/issues
 build-type:     Simple
@@ -19,7 +18,8 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      OCD
+      OCD.CSV
   other-modules:
       Paths_ocd
   hs-source-dirs:

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lib (parseCsvFile) where
+module OCD.CSV (parseCsvFile) where
 
 import qualified Data.ByteString.Lazy as BL
 import Data.Csv
@@ -18,11 +18,11 @@ instance FromNamedRecord OcInfo where
     parseDate :: String -> Parser LocalTime
     parseDate = parseTimeM True defaultTimeLocale "%Y-%m-%d %T"
 
-parseCsvFile :: IO ()
-parseCsvFile = do
-  csvData <- BL.readFile "Outcrop_creationDates_.InsertedAt.csv"
+parseCsvFile :: String -> IO (Either String [OcInfo])
+parseCsvFile filePath = do
+  csvData <- BL.readFile filePath
   case decodeByNameWith decodeOpts csvData :: Either String (Header, V.Vector OcInfo) of
-    Left err -> putStrLn $ "Error: " ++ err
-    Right (_, v) -> V.forM_ v print
+    Left err -> pure $ Left err
+    Right (_, v) -> pure $ Right (V.toList v)
  where
   decodeOpts = defaultDecodeOptions{decDelimiter = fromIntegral (fromEnum ';')}
