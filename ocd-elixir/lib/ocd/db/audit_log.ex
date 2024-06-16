@@ -5,6 +5,7 @@ defmodule Ocd.Db.AuditLog do
     field(:entity, :string)
     field(:action, :string)
     field(:user_id, :integer)
+    field(:outcrop_id, :integer)
     field(:study_id, :integer)
     field(:inserted_at, :naive_datetime)
   end

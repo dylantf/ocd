@@ -5,5 +5,6 @@ defmodule Mix.Tasks.Ocd do
   def run(_) do
     Mix.Task.run("app.start")
     Ocd.main()
+    0
   end
 end

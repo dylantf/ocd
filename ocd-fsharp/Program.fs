@@ -5,7 +5,7 @@ open System.IO
 open FSharp.Data
 
 let filepath =
-    Path.Combine(__SOURCE_DIRECTORY__, "Outcrop_creationDates_.InsertedAt.csv")
+    Path.Combine(__SOURCE_DIRECTORY__, "dates.csv")
 
 let contents =
     CsvFile.Load(filepath, hasHeaders = true, separators = ";").Rows
