@@ -10,9 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper.FSharp" Version="4.8.0" />
     <PackageReference Include="FSharp.Data" Version="6.4.0" />
-    <PackageReference Include="Npgsql" Version="8.0.3" />
+    <PackageReference Include="Npgsql.FSharp" Version="5.7.0" />
   </ItemGroup>
 
 </Project>

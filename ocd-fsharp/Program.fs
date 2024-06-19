@@ -4,44 +4,49 @@ open Npgsql
 open System
 open System.IO
 open FSharp.Data
-open System.Data
-open Dapper.FSharp.PostgreSQL
+open Npgsql.FSharp
 
-OptionTypes.register ()
-
-[<CLIMutable>]
 type AuditLog =
-    { id: int
-      entity: string
-      action: string
-      user_id: int64
-      outcrop_id: int64 option
-      study_id: int64 option
-      inserted_at: DateTime }
-
-let auditLogTable = table'<AuditLog> "audit_logs"
+    { Id: int
+      Entity: string
+      Action: string
+      UserId: int64
+      OutcropId: int64 option
+      StudyId: int64 option
+      InsertedAt: DateTime }
 
 let getConnection () =
-    new NpgsqlConnection("Host=localhost; Port=5432; Database=safari_api; Username=postgres; Password=postgres")
-    :> IDbConnection
+    "Host=localhost; Port=5432; Database=safari_api; Username=postgres; Password=postgres"
+    |> Sql.connect
 
 let filepath = Path.Combine(__SOURCE_DIRECTORY__, "dates.csv")
 
 let csvContents () =
     CsvFile.Load(filepath, hasHeaders = true, separators = ";").Rows
     |> Seq.map (fun row -> (int64 row.["ID"], DateTime.Parse(row.["Inserted At"])))
-    |> Seq.toList
+    |> Seq.toArray
 
-let currentAuditLogs (outcropIds: int64 option list) =
-    let conn = getConnection ()
+let currentAuditLogs (outcropIds: int64 array) : AuditLog list =
+    let q = @"
+        select * from audit_logs
+        where action = 'created'
+        and al.outcrop_id in @outcropIds"
 
-    select {
-        for al in auditLogTable do
-            where (al.action = "created")
-            andWhere (isNotNullValue al.outcrop_id)
-            andWhere (isIn al.outcrop_id outcropIds)
-    }
-    |> conn.SelectAsync<AuditLog>
+    getConnection()
+    |> Sql.query q
+    |> Sql.parameters ["outcropIds", Sql.int64Array outcropIds]
+    |> Sql.executeAsync (fun read ->
+        { 
+            Id = read.int "id"
+            Entity = read.string "entity"
+            Action = read.string "action"
+            UserId = read.int64 "user_id"
+            OutcropId = read.int64OrNone "outcrop_id"
+            StudyId = read.int64OrNone "study_id"
+            InsertedAt = read.dateTime "inserted_at"
+        })
+    |> Async.AwaitTask
+    |> Async.RunSynchronously
 
 let main () =
     printfn "CSV Contents:"
@@ -49,13 +54,11 @@ let main () =
     let c = csvContents ()
     c |> Seq.iter (fun row -> printfn $"{row}")
 
-    let csvOutcropIds = List.map (fst >> Some) c
+    let csvOutcropIds = Array.map fst c
 
     printfn "Current audit logs:"
 
     currentAuditLogs (csvOutcropIds)
-    |> Async.AwaitTask
-    |> Async.RunSynchronously
     |> Seq.iter (fun row -> printfn $"{row}")
 
 main ()
