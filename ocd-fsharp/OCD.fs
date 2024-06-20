@@ -6,57 +6,95 @@ open System.IO
 open FSharp.Data
 open Npgsql.FSharp
 
-type AuditLog =
-    { Id: int
-      Entity: string
+type AuditLogRead = { OutcropId: int64 }
+
+type AuditLogInsert =
+    { Entity: string
       Action: string
       UserId: int64
-      OutcropId: int64 option
-      StudyId: int64 option
+      OutcropId: int64
       InsertedAt: DateTime }
 
-let getConnection () =
+let connStr =
     "Host=localhost; Port=5432; Database=safari_api; Username=postgres; Password=postgres"
-    |> Sql.connect
 
 let filepath = Path.Combine(__SOURCE_DIRECTORY__, "dates.csv")
 
 let csvContents () =
     CsvFile.Load(filepath, hasHeaders = true, separators = ";").Rows
     |> Seq.map (fun row -> (int64 row.["ID"], DateTime.Parse(row.["Inserted At"])))
-    |> Seq.toArray
+    |> Seq.toList
 
-let currentAuditLogs (outcropIds: int64 array) : AuditLog list =
-    let q =
+let outcropIdsWithLogs searchIds =
+    let query =
         @"
         select * from audit_logs
         where action = 'created'
         and outcrop_id = any(@outcropIds)"
 
-    getConnection ()
-    |> Sql.query q
-    |> Sql.parameters [ "outcropIds", Sql.int64Array outcropIds ]
-    |> Sql.executeAsync (fun read ->
-        { Id = read.int "id"
-          Entity = read.string "entity"
-          Action = read.string "action"
-          UserId = read.int64 "user_id"
-          OutcropId = read.int64OrNone "outcrop_id"
-          StudyId = read.int64OrNone "study_id"
-          InsertedAt = read.dateTime "inserted_at" })
-    |> Async.AwaitTask
-    |> Async.RunSynchronously
+    Sql.connect connStr
+    |> Sql.query query
+    |> Sql.parameters [ "outcropIds", Sql.int64Array <| List.toArray searchIds ]
+    |> Sql.execute (fun read -> { OutcropId = read.int64 "outcrop_id" })
+    |> Seq.map (fun log -> log.OutcropId)
+
+let initLogsToInsert existingIds csvRecords =
+    csvRecords
+    |> List.filter (fun (ocId, _) -> not <| Seq.contains ocId existingIds)
+    |> List.map (fun (ocId, insertedAt) ->
+        { Entity = "outcrop"
+          Action = "created"
+          UserId = 11 // Nicole
+          OutcropId = ocId
+          InsertedAt = insertedAt })
+
+let insertQuery =
+    @"
+    insert into audit_logs
+        (entity, action, user_id, outcrop_id, inserted_at)
+    values
+        (@entity, @action, @userId, @outcropId, @insertedAt)
+    returning id"
+
+let rec insertNewLogs logs =
+    let conn = new NpgsqlConnection(connStr)
+    conn.Open()
+
+    let rec doInsert logs success failed =
+        match logs with
+        | [] -> (success, failed)
+        | log :: rest ->
+            Sql.existingConnection conn
+            |> Sql.query insertQuery
+            |> Sql.parameters
+                [ "entity", Sql.string log.Entity
+                  "action", Sql.string log.Action
+                  "userId", Sql.int64 log.UserId
+                  "outcropId", Sql.int64 log.OutcropId
+                  "insertedAt", Sql.date log.InsertedAt ]
+            |> Sql.executeNonQuery
+            |> function
+                | 0 -> doInsert rest success (failed + 1)
+                | n -> doInsert rest (success + n) failed
+
+    conn.Close()
+    doInsert logs 0 0
 
 let main () =
-    printfn "CSV Contents:"
+    printfn "Loading CSV Contents..."
+    let csvData = csvContents ()
+    printfn "Loaded %d records from CSV" <| Seq.length csvData
 
-    let c = csvContents ()
-    c |> Seq.iter (fun row -> printfn $"{row}")
+    printfn "Finding outcrops that already have 'created' audit logs:"
+    let curIds = csvData |> List.map fst |> outcropIdsWithLogs
 
-    let csvOutcropIds = Array.map fst c
+    printfn "%d outcrops already have 'created' logs." <| Seq.length curIds
+    printfn "Choosing outcrops that don't already have logs."
+    let logsToInsert = initLogsToInsert curIds csvData
 
-    printfn "Current audit logs:"
+    printfn "Inserting %d new audit logs..." <| Seq.length logsToInsert
 
-    currentAuditLogs (csvOutcropIds) |> Seq.iter (fun row -> printfn $"{row}")
+    let (success, failed) = insertNewLogs logsToInsert
+    printfn $"Finished with {success} inserts and {failed} failures"
 
 main ()
