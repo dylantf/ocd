@@ -11,6 +11,11 @@ dependencies:
   - vector
   - time
   - bytestring
+  - text
+  - persistent
+  - persistent-postgresql
+  - mtl
+  - monad-logger
 
 ghc-options:
   - -Wall

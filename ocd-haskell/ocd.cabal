@@ -20,6 +20,7 @@ library
   exposed-modules:
       OCD
       OCD.CSV
+      OCD.Database
   other-modules:
       Paths_ocd
   hs-source-dirs:
@@ -29,6 +30,11 @@ library
       base >=4.7 && <5
     , bytestring
     , cassava
+    , monad-logger
+    , mtl
+    , persistent
+    , persistent-postgresql
+    , text
     , time
     , vector
   default-language: Haskell2010
@@ -44,7 +50,12 @@ executable ocd-exe
       base >=4.7 && <5
     , bytestring
     , cassava
+    , monad-logger
+    , mtl
     , ocd
+    , persistent
+    , persistent-postgresql
+    , text
     , time
     , vector
   default-language: Haskell2010
@@ -61,7 +72,12 @@ test-suite ocd-test
       base >=4.7 && <5
     , bytestring
     , cassava
+    , monad-logger
+    , mtl
     , ocd
+    , persistent
+    , persistent-postgresql
+    , text
     , time
     , vector
   default-language: Haskell2010
