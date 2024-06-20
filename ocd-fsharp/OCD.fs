@@ -27,24 +27,23 @@ let csvContents () =
     |> Seq.toArray
 
 let currentAuditLogs (outcropIds: int64 array) : AuditLog list =
-    let q = @"
+    let q =
+        @"
         select * from audit_logs
         where action = 'created'
-        and al.outcrop_id in @outcropIds"
+        and outcrop_id = any(@outcropIds)"
 
-    getConnection()
+    getConnection ()
     |> Sql.query q
-    |> Sql.parameters ["outcropIds", Sql.int64Array outcropIds]
+    |> Sql.parameters [ "outcropIds", Sql.int64Array outcropIds ]
     |> Sql.executeAsync (fun read ->
-        { 
-            Id = read.int "id"
-            Entity = read.string "entity"
-            Action = read.string "action"
-            UserId = read.int64 "user_id"
-            OutcropId = read.int64OrNone "outcrop_id"
-            StudyId = read.int64OrNone "study_id"
-            InsertedAt = read.dateTime "inserted_at"
-        })
+        { Id = read.int "id"
+          Entity = read.string "entity"
+          Action = read.string "action"
+          UserId = read.int64 "user_id"
+          OutcropId = read.int64OrNone "outcrop_id"
+          StudyId = read.int64OrNone "study_id"
+          InsertedAt = read.dateTime "inserted_at" })
     |> Async.AwaitTask
     |> Async.RunSynchronously
 
@@ -58,7 +57,6 @@ let main () =
 
     printfn "Current audit logs:"
 
-    currentAuditLogs (csvOutcropIds)
-    |> Seq.iter (fun row -> printfn $"{row}")
+    currentAuditLogs (csvOutcropIds) |> Seq.iter (fun row -> printfn $"{row}")
 
 main ()
