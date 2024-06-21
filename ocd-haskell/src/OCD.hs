@@ -1,6 +1,5 @@
 module OCD (backfill) where
 
-import Data.List (intercalate)
 import OCD.CSV
 import OCD.Database
 
@@ -9,6 +8,8 @@ backfill = do
   parseResult <- parseCsvFile "dates.csv"
   case parseResult of
     Left err -> putStrLn $ "Error parsing CSV:" ++ err
-    Right ocInfo -> do
-      ocIds <- ocIdsWithExistingLogs $ map outcropId ocInfo
-      print $ intercalate ", " $ map show ocIds
+    Right ocInfos -> do
+      ocIds <- ocIdsWithExistingLogs $ map outcropId ocInfos
+      putStrLn $ "Found " ++ show (length ocIds) ++ " existing OCs with logs"
+      let toInsert = filter (\ocInfo -> outcropId ocInfo `elem` ocIds) ocInfos
+      putStrLn $ show (length toInsert) ++ " records to be created"

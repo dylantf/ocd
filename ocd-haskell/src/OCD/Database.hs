@@ -36,15 +36,17 @@ AuditLog sql=audit_logs
     deriving Show
 |]
 
-ocIdsWithExistingLogs :: [Int64] -> IO [Int64]
-ocIdsWithExistingLogs outcropIds = runStdoutLoggingT $ withPostgresqlConn connString $ \backend -> liftIO $ do
-  flip runSqlConn backend $ do
-    auditLogs <-
-      selectList
-        [ AuditLogEntity ==. "outcrop",
-          AuditLogOutcropId <-. map Just outcropIds
-        ]
-        []
-    return $ mapMaybe (auditLogOutcropId . entityVal) auditLogs
+execQuery :: SqlPersistT IO a -> IO a
+execQuery action = runStdoutLoggingT $
+  withPostgresqlConn connString $
+    \backend -> liftIO $ runSqlConn action backend
   where
     connString = "postgresql://postgres:postgres@localhost:5432/safari_api"
+
+ocIdsWithExistingLogs :: [Int64] -> IO [Int64]
+ocIdsWithExistingLogs outcropIds = execQuery $ do
+  auditLogs <-
+    selectList
+      [AuditLogEntity ==. "outcrop", AuditLogOutcropId <-. map Just outcropIds]
+      []
+  return $ mapMaybe (auditLogOutcropId . entityVal) auditLogs
