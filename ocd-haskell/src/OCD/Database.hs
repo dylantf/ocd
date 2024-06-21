@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module OCD.Database (ocIdsWithExistingLogs) where
+module OCD.Database (ocIdsWithExistingLogs, insertNewLogs) where
 
 import Control.Monad.IO.Class
 import Control.Monad.Logger (runStdoutLoggingT)
@@ -29,7 +29,7 @@ share
 AuditLog sql=audit_logs
     entity Text
     action Text
-    userId Int
+    userId Int64
     outcropId Int64 Maybe
     studyId Int64 Maybe
     insertedAt UTCTime
@@ -50,3 +50,21 @@ ocIdsWithExistingLogs outcropIds = execQuery $ do
       [AuditLogEntity ==. "outcrop", AuditLogOutcropId <-. map Just outcropIds]
       []
   return $ mapMaybe (auditLogOutcropId . entityVal) auditLogs
+
+insertNewLogs :: [(Int64, UTCTime)] -> IO (Int, Int)
+insertNewLogs toBeCreated = doInsert toBeCreated (0, 0)
+  where
+    doInsert :: [(Int64, UTCTime)] -> (Int, Int) -> IO (Int, Int)
+    doInsert [] result = return result
+    doInsert ((outcropId, insertedAt) : xs) (success, failed) = do
+      _ <- execQuery $ do
+        insert $
+          AuditLog
+            { auditLogEntity = "outcrop",
+              auditLogAction = "created",
+              auditLogUserId = 11,
+              auditLogOutcropId = Just outcropId,
+              auditLogStudyId = Nothing,
+              auditLogInsertedAt = insertedAt
+            }
+      doInsert xs (success + 1, failed)
