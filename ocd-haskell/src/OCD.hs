@@ -11,7 +11,7 @@ backfill = do
     Right ocInfos -> do
       ocIds <- ocIdsWithExistingLogs $ map outcropId ocInfos
       putStrLn $ "Found " ++ show (length ocIds) ++ " existing OCs with logs"
-      let toInsert = filter (\ocInfo -> outcropId ocInfo `elem` ocIds) ocInfos
+      let toInsert = filter (\ocInfo -> outcropId ocInfo `notElem` ocIds) ocInfos
       putStrLn $ show (length toInsert) ++ " records to be created"
-      (success, failed) <- insertNewLogs $ map (\ocInfo -> (outcropId ocInfo, insertedAt ocInfo)) ocInfos
+      (success, failed) <- insertNewLogs $ map (\ocInfo -> (outcropId ocInfo, insertedAt ocInfo)) toInsert
       putStrLn $ "Created " ++ show success ++ " successful logs with " ++ show failed ++ " failed."
