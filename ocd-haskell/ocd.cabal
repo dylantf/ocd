@@ -19,8 +19,6 @@ source-repository head
 library
   exposed-modules:
       OCD
-      OCD.CSV
-      OCD.Database
   other-modules:
       Paths_ocd
   hs-source-dirs:
