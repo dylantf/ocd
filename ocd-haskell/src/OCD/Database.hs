@@ -16,6 +16,7 @@ module OCD.Database (ocIdsWithExistingLogs, insertNewLogs) where
 
 import Control.Monad.IO.Class
 import Control.Monad.Logger (runStdoutLoggingT)
+import Data.Functor ((<&>))
 import Data.Int
 import Data.Maybe
 import Data.Text (Text)
@@ -45,26 +46,18 @@ execQuery action = runStdoutLoggingT $
 
 ocIdsWithExistingLogs :: [Int64] -> IO [Int64]
 ocIdsWithExistingLogs outcropIds = execQuery $ do
-  auditLogs <-
-    selectList
-      [AuditLogEntity ==. "outcrop", AuditLogOutcropId <-. map Just outcropIds]
-      []
-  return $ mapMaybe (auditLogOutcropId . entityVal) auditLogs
+  selectList
+    [AuditLogEntity ==. "outcrop", AuditLogOutcropId <-. map Just outcropIds]
+    []
+    <&> mapMaybe (auditLogOutcropId . entityVal)
 
 insertNewLogs :: [(Int64, UTCTime)] -> IO (Int, Int)
-insertNewLogs toBeCreated = doInsert toBeCreated (0, 0)
+insertNewLogs toBeCreated = execQuery (doInsert toBeCreated (0, 0))
   where
-    doInsert :: [(Int64, UTCTime)] -> (Int, Int) -> IO (Int, Int)
-    doInsert [] result = return result
+    doInsert :: [(Int64, UTCTime)] -> (Int, Int) -> SqlPersistT IO (Int, Int)
+    doInsert [] (success, failed) = pure (success, failed)
     doInsert ((outcropId, insertedAt) : xs) (success, failed) = do
-      _ <- execQuery $ do
-        insert $
-          AuditLog
-            { auditLogEntity = "outcrop",
-              auditLogAction = "created",
-              auditLogUserId = 11,
-              auditLogOutcropId = Just outcropId,
-              auditLogStudyId = Nothing,
-              auditLogInsertedAt = insertedAt
-            }
-      doInsert xs (success + 1, failed)
+      insertResult <- insert $ AuditLog "outcrop" "created" 11 (Just outcropId) Nothing insertedAt
+      if insertResult == toSqlKey 0
+        then doInsert xs (success + 1, failed)
+        else doInsert xs (success, failed + 1)
