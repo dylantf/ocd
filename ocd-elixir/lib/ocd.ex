@@ -11,16 +11,17 @@ defmodule Ocd do
     IO.puts("Parsed #{length(records)} records from CSV file")
 
     logs = existing_audit_logs(outcrop_ids)
-    IO.puts("Loaded #{length(logs)} existing audit logs!")
+    IO.puts("Loaded #{length(logs)} existing audit logs")
 
     to_insert = logs_to_insert(records, logs)
     IO.puts("#{length(to_insert)} audit logs need to be created")
 
-    result = create_audit_logs(to_insert)
-    successful = Enum.count(result, fn {_id, status} -> status == :ok end)
-    errors = Enum.count(result, fn {_id, status} -> status == :error end)
-    IO.puts("Finished with #{successful} and #{errors} errors")
-    nil
+    if length(to_insert) > 0 do
+      {success, failed} = create_audit_logs(to_insert)
+      IO.puts("Inserted #{success} logs successfully and #{failed} errors")
+    else
+      IO.puts("Nothing to do!")
+    end
   end
 
   @spec parse_csv_file() :: [csv_row()]
@@ -54,30 +55,21 @@ defmodule Ocd do
     Enum.filter(csv_data, fn {id, _} -> !Enum.member?(existing_ids, id) end)
   end
 
-  @type create_result :: {integer(), atom()}
+  @spec create_audit_logs([csv_row()]) :: {num_success :: integer(), num_failed :: integer()}
+  defp create_audit_logs(items) when length(items) > 0 do
+    items =
+      Enum.map(items, fn {outcrop_id, inserted_at} ->
+        %{
+          entity: "outcrop",
+          action: "created",
+          user_id: 11,
+          outcrop_id: outcrop_id,
+          study_id: nil,
+          inserted_at: inserted_at
+        }
+      end)
 
-  @spec create_audit_logs([csv_row()], [create_result()]) :: [create_result()]
-
-  defp create_audit_logs(items, acc \\ [])
-  defp create_audit_logs([], acc), do: acc
-
-  defp create_audit_logs([{outcrop_id, inserted_at} | rest], acc) do
-    Repo.insert(%AuditLog{
-      entity: "outcrop",
-      action: "created",
-      user_id: 11,
-      outcrop_id: outcrop_id,
-      study_id: nil,
-      inserted_at: inserted_at
-    })
-    |> case do
-      {:ok, _} ->
-        IO.puts("Create log for #{outcrop_id} created successfully")
-        create_audit_logs(rest, [{outcrop_id, :ok} | acc])
-
-      err ->
-        IO.inspect(err, label: "Error creating audit log - Outcrop #{outcrop_id}")
-        create_audit_logs(rest, [{outcrop_id, :error} | acc])
-    end
+    {num_success, _} = Repo.insert_all(AuditLog, items)
+    {num_success, length(items) - num_success}
   end
 end
