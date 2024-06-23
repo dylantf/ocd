@@ -1,0 +1,19 @@
+{
+  "name": "ocd-typescript",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "bun run ./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.3.14",
+    "bun-types": "latest"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.31.2",
+    "papaparse": "^5.4.1",
+    "postgres": "^3.4.4",
+    "typescript": "^5.5.2",
+    "zod": "^3.23.8"
+  }
+}
