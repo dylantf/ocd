@@ -1,26 +1,49 @@
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
+use serde::Deserialize;
 
-fn main() {
+#[derive(Debug, Deserialize)]
+struct CsvRow {
+    #[serde(rename(deserialize = "ID"))]
+    outcrop_id: u64,
+    #[serde(rename(deserialize = "Inserted At"), with = "timestamp_fmt")]
+    inserted_at: DateTime<Utc>,
+}
+
+mod timestamp_fmt {
+    use chrono::{DateTime, NaiveDateTime, Utc};
+    use serde::{self, Deserialize, Deserializer};
+
+    const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let dt = NaiveDateTime::parse_from_str(&s, FORMAT).map_err(serde::de::Error::custom)?;
+        Ok(DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
+    }
+}
+
+fn read_csv_file(filepath: &str) -> Vec<CsvRow> {
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(b';')
-        .from_path("Outcrop_creationDates_.InsertedAt.csv")
+        .from_path(filepath)
         .unwrap();
 
-    let records = reader
-        .records()
-        .map(|record| {
-            let result = record.unwrap();
-            let outcrop_id = result.get(0).unwrap().parse::<u64>();
-            let outcrop_id = outcrop_id.unwrap();
-
-            let inserted_at =
-                DateTime::parse_from_str(result.get(1).unwrap(), "%Y-%m-%d %H:%M:%S").unwrap();
-
-            (outcrop_id, inserted_at)
+    reader
+        .deserialize()
+        .map(|row| {
+            let record: CsvRow = row.unwrap();
+            record
         })
-        .collect::<Vec<_>>();
+        .collect::<Vec<CsvRow>>()
+}
+
+fn main() {
+    let records = read_csv_file("dates.csv");
 
     for line in records {
-        println!("{:?}", line)
+        println!("{:?} - {:?}", line.outcrop_id, line.inserted_at)
     }
 }
