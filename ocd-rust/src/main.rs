@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use sqlx::postgres::PgPoolOptions;
 
 #[derive(Debug, Deserialize)]
 struct CsvRow {
@@ -40,10 +41,37 @@ fn read_csv_file(filepath: &str) -> Vec<CsvRow> {
         .collect::<Vec<CsvRow>>()
 }
 
-fn main() {
+#[derive(sqlx::FromRow, Debug)]
+struct ExistingLog {
+    outcrop_id: Option<i64>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), sqlx::Error> {
     let records = read_csv_file("dates.csv");
 
-    for line in records {
-        println!("{:?} - {:?}", line.outcrop_id, line.inserted_at)
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect("postgres://postgres:postgres@localhost:5432/safari_api")
+        .await?;
+
+    let cur_logs = sqlx::query_as::<_, ExistingLog>(
+        r#"
+        select outcrop_id from audit_logs
+        where entity = 'outcrop'
+        and action = 'created'
+        and outcrop_id is not null"#,
+    )
+    .fetch_all(&pool)
+    .await?;
+
+    for log in cur_logs {
+        println!("{:?}", log);
     }
+
+    // for line in records {
+    //     println!("{:?} - {:?}", line.outcrop_id, line.inserted_at)
+    // }
+
+    Ok(())
 }
