@@ -19,7 +19,7 @@
  (name ocd)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml dune csv)
+ (depends ocaml dune csv calendar)
  (tags
   (topics "to describe" your project)))
 

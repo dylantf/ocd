@@ -1,4 +1,4 @@
 (executable
  (public_name ocd)
  (name main)
- (libraries csv))
+ (libraries csv calendar))
