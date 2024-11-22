@@ -6,30 +6,14 @@ import gleam/option.{Some}
 import gleam/pgo
 import gleam/string
 import simplifile
-
-type Timestamp =
-  #(#(Int, Int, Int), #(Int, Int, Int))
+import tempo.{type DateTime}
+import tempo/date
+import tempo/datetime
+import tempo/month
+import tempo/time
 
 pub type CsvRow {
-  CsvRow(outcrop_id: Int, inserted_at: Timestamp)
-}
-
-fn parse_int_exn(n: String) -> Int {
-  case int.parse(n) {
-    Ok(parsed) -> parsed
-    _ -> panic
-  }
-}
-
-fn decode_timestamp(timestamp: String) -> Timestamp {
-  let assert [date, time] = string.split(timestamp, " ")
-
-  let assert [year, month, day] =
-    string.split(date, "-") |> list.map(parse_int_exn)
-  let assert [hour, minute, second] =
-    string.split(time, ":") |> list.map(parse_int_exn)
-
-  #(#(year, month, day), #(hour, minute, second))
+  CsvRow(outcrop_id: Int, inserted_at: DateTime)
 }
 
 fn parse_csv(contents: String) -> List(CsvRow) {
@@ -41,7 +25,8 @@ fn parse_csv(contents: String) -> List(CsvRow) {
   |> list.map(fn(row) {
     let assert [outcrop_id_s, inserted_at] = string.split(row, ";")
     let assert Ok(outcrop_id) = int.parse(outcrop_id_s)
-    let inserted_at = decode_timestamp(inserted_at)
+    let assert Ok(inserted_at) =
+      datetime.parse(inserted_at <> "Z", "YYYY-MM-DD HH:mm:ssZ")
     CsvRow(outcrop_id, inserted_at)
   })
 }
@@ -75,6 +60,20 @@ fn find_existing_records(
   response.rows
 }
 
+fn date_time_to_tuple(dt: DateTime) {
+  let d = datetime.get_date(dt)
+  let t = datetime.get_time(dt)
+
+  let date_tuple = #(
+    date.get_year(d),
+    date.get_month(d) |> month.to_int,
+    date.get_day(d),
+  )
+  let time_tuple = #(time.get_hour(t), time.get_minute(t), time.get_second(t))
+
+  #(date_tuple, time_tuple)
+}
+
 fn insert_new_records(connection: pgo.Connection, records: List(CsvRow)) -> Int {
   let placeholders =
     list.index_map(records, fn(_, i) {
@@ -97,7 +96,7 @@ fn insert_new_records(connection: pgo.Connection, records: List(CsvRow)) -> Int 
         pgo.text("created"),
         pgo.int(r.outcrop_id),
         pgo.int(11),
-        pgo.timestamp(r.inserted_at),
+        pgo.timestamp(r.inserted_at |> date_time_to_tuple),
       ]
     })
     |> list.flatten
