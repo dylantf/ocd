@@ -3,8 +3,8 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{Some}
-import gleam/pgo
 import gleam/string
+import pog
 import simplifile
 import tempo.{type DateTime}
 import tempo/date
@@ -31,9 +31,9 @@ fn parse_csv(contents: String) -> List(CsvRow) {
   })
 }
 
-fn db_config() -> pgo.Config {
-  pgo.Config(
-    ..pgo.default_config(),
+fn db_config() -> pog.Config {
+  pog.Config(
+    ..pog.default_config(),
     host: "localhost",
     port: 5432,
     database: "safari_api",
@@ -43,7 +43,7 @@ fn db_config() -> pgo.Config {
 }
 
 fn find_existing_records(
-  connection: pgo.Connection,
+  db: pog.Connection,
   outcrop_ids: List(Int),
 ) -> List(Int) {
   let sql =
@@ -52,29 +52,32 @@ fn find_existing_records(
      and action = 'created'
      and outcrop_id = any($1)"
 
-  let query_vars = [list.map(outcrop_ids, pgo.int) |> pgo.array]
-
   let assert Ok(response) =
-    pgo.execute(sql, connection, query_vars, dynamic.element(0, dynamic.int))
+    pog.query(sql)
+    |> pog.parameter(list.map(outcrop_ids, pog.int) |> pog.array)
+    |> pog.returning(dynamic.element(0, dynamic.int))
+    |> pog.execute(db)
 
   response.rows
 }
 
-fn date_time_to_tuple(dt: DateTime) {
+fn tempo_to_pog(dt: tempo.DateTime) -> pog.Timestamp {
   let d = datetime.get_date(dt)
   let t = datetime.get_time(dt)
 
-  let date_tuple = #(
-    date.get_year(d),
-    date.get_month(d) |> month.to_int,
-    date.get_day(d),
-  )
-  let time_tuple = #(time.get_hour(t), time.get_minute(t), time.get_second(t))
+  let pog_date =
+    pog.Date(
+      date.get_year(d),
+      date.get_month(d) |> month.to_int,
+      date.get_day(d),
+    )
+  let pog_time =
+    pog.Time(time.get_hour(t), time.get_minute(t), time.get_second(t), 0)
 
-  #(date_tuple, time_tuple)
+  pog.Timestamp(pog_date, pog_time)
 }
 
-fn insert_new_records(connection: pgo.Connection, records: List(CsvRow)) -> Int {
+fn insert_new_records(db: pog.Connection, records: List(CsvRow)) -> Int {
   let placeholders =
     list.index_map(records, fn(_, i) {
       "("
@@ -92,17 +95,20 @@ fn insert_new_records(connection: pgo.Connection, records: List(CsvRow)) -> Int 
   let variables =
     list.map(records, fn(r) {
       [
-        pgo.text("outcrop"),
-        pgo.text("created"),
-        pgo.int(r.outcrop_id),
-        pgo.int(11),
-        pgo.timestamp(r.inserted_at |> date_time_to_tuple),
+        pog.text("outcrop"),
+        pog.text("created"),
+        pog.int(r.outcrop_id),
+        pog.int(11),
+        pog.timestamp(r.inserted_at |> tempo_to_pog),
       ]
     })
     |> list.flatten
 
   let assert Ok(response) =
-    pgo.execute(sql, connection, variables, dynamic.dynamic)
+    pog.query(sql)
+    |> list.fold(variables, _, pog.parameter)
+    |> pog.returning(dynamic.dynamic)
+    |> pog.execute(db)
 
   response.count
 }
@@ -115,7 +121,7 @@ pub fn main() {
   io.debug("Read " <> num_rows <> " records from CSV file.")
 
   io.println("Connecting to database...")
-  let db = pgo.connect(db_config())
+  let db = pog.connect(db_config())
 
   let outcrop_ids_with_existing =
     find_existing_records(db, list.map(rows, fn(row) { row.outcrop_id }))

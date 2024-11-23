@@ -15,9 +15,9 @@ version = "1.0.0"
 [dependencies]
 gleam_stdlib = ">= 0.34.0 and < 2.0.0"
 simplifile = ">= 2.0.1 and < 3.0.0"
-gleam_pgo = ">= 0.13.0 and < 1.0.0"
 gsv = ">= 2.0.3 and < 3.0.0"
 gtempo = ">= 5.0.2 and < 6.0.0"
+pog = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
