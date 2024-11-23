@@ -1,3 +1,7 @@
+import cake/adapter/postgres
+import cake/insert as i
+import cake/select as s
+import cake/where as w
 import gleam/dynamic
 import gleam/int
 import gleam/io
@@ -7,10 +11,7 @@ import gleam/string
 import pog
 import simplifile
 import tempo.{type DateTime}
-import tempo/date
 import tempo/datetime
-import tempo/month
-import tempo/time
 
 pub type CsvRow {
   CsvRow(outcrop_id: Int, inserted_at: DateTime)
@@ -46,71 +47,47 @@ fn find_existing_records(
   db: pog.Connection,
   outcrop_ids: List(Int),
 ) -> List(Int) {
-  let sql =
-    "select outcrop_id from audit_logs
-     where entity = 'outcrop'
-     and action = 'created'
-     and outcrop_id = any($1)"
+  let query =
+    s.new()
+    |> s.select_col("outcrop_id")
+    |> s.from_table("audit_logs")
+    |> s.where(w.col("entity") |> w.eq(w.string("outcrop")))
+    |> s.where(w.col("action") |> w.eq(w.string("created")))
+    |> s.where(w.col("outcrop_id") |> w.in(outcrop_ids |> list.map(w.int)))
+    |> s.to_query
 
-  let assert Ok(response) =
-    pog.query(sql)
-    |> pog.parameter(list.map(outcrop_ids, pog.int) |> pog.array)
-    |> pog.returning(dynamic.element(0, dynamic.int))
-    |> pog.execute(db)
+  let assert Ok(result) =
+    query
+    |> postgres.run_read_query(dynamic.element(0, dynamic.int), db)
 
-  response.rows
-}
-
-fn tempo_to_pog(dt: tempo.DateTime) -> pog.Timestamp {
-  let d = datetime.get_date(dt)
-  let t = datetime.get_time(dt)
-
-  let pog_date =
-    pog.Date(
-      date.get_year(d),
-      date.get_month(d) |> month.to_int,
-      date.get_day(d),
-    )
-  let pog_time =
-    pog.Time(time.get_hour(t), time.get_minute(t), time.get_second(t), 0)
-
-  pog.Timestamp(pog_date, pog_time)
+  result
 }
 
 fn insert_new_records(db: pog.Connection, records: List(CsvRow)) -> Int {
-  let placeholders =
-    list.index_map(records, fn(_, i) {
-      "("
-      <> list.range(i * 5 + 1, i * 5 + 5)
-      |> list.map(fn(num) { "$" <> int.to_string(num) })
-      |> string.join(", ")
-      <> ")"
-    })
-    |> string.join(", ")
-
-  let sql = "insert into audit_logs
-    (entity, action, outcrop_id, user_id, inserted_at)
-    values " <> placeholders
-
-  let variables =
+  let rows =
     list.map(records, fn(r) {
       [
-        pog.text("outcrop"),
-        pog.text("created"),
-        pog.int(r.outcrop_id),
-        pog.int(11),
-        pog.timestamp(r.inserted_at |> tempo_to_pog),
+        i.string("outcrop"),
+        i.string("created"),
+        i.int(r.outcrop_id),
+        i.int(11),
+        // Not working
+      // i.string(r.inserted_at |> datetime.to_string),
+      // i.string("2024-11-23T00:00:00Z"),
       ]
+      |> i.row
     })
-    |> list.flatten
 
-  let assert Ok(response) =
-    pog.query(sql)
-    |> list.fold(variables, _, pog.parameter)
-    |> pog.returning(dynamic.dynamic)
-    |> pog.execute(db)
+  let query =
+    rows
+    |> i.from_values(table_name: "audit_logs", columns: [
+      "entity", "action", "outcrop_id", "user_id", "inserted_at",
+    ])
+    |> i.to_query
 
-  response.count
+  let assert Ok(result) = postgres.run_write_query(query, dynamic.dynamic, db)
+
+  list.length(result)
 }
 
 pub fn main() {
